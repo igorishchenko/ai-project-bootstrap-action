@@ -1,0 +1,32 @@
+# Reports drift on every pull request, as one comment that updates in place.
+#
+# Deliberately does not fail the build: the default `fail-on: none` means this
+# tells you something and gets out of the way. Set `fail-on: warning` once the
+# repo is current and you want it to stay that way.
+name: AI rules
+
+on:
+  pull_request:
+  # Keeps the default branch honest even when nobody opens a PR — a repo can
+  # drift because the generator moved, not because anyone touched the code.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for the PR comment. Without it the check still runs and reports to
+  # the job summary; only the comment is skipped, with a warning.
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - uses: igorishchenko/ai-project-bootstrap-action@v1
+        with:
+          fail-on: none

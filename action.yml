@@ -1,0 +1,75 @@
+name: 'AI rules drift check'
+description: >-
+  Report when a repository's generated AI coding rules no longer match what
+  ai-project-bootstrap would write today. Comments on the pull request, and
+  optionally fails the build.
+author: 'Ihor Ishchenko'
+
+branding:
+  icon: 'refresh-cw'
+  color: 'orange'
+
+inputs:
+  working-directory:
+    description: 'Directory holding ai-project.config.json.'
+    required: false
+    default: '.'
+  version:
+    description: >-
+      Which ai-project-bootstrap release to check against. "latest" is the
+      point — drift is measured against the newest templates, so pinning
+      guarantees the check stops noticing anything new.
+    required: false
+    default: 'latest'
+  fail-on:
+    description: >-
+      Fail the job at or above this level: none, info, warning, critical.
+      Defaults to none — this reports, it does not block.
+    required: false
+    default: 'none'
+  comment:
+    description: 'Post (and keep updating) a single comment on the pull request.'
+    required: false
+    default: 'true'
+  token:
+    description: >-
+      Token used to read and write the PR comment. Needs
+      `permissions: pull-requests: write` in the calling workflow.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  severity:
+    description: 'none | info | warning | critical'
+    value: ${{ steps.check.outputs.severity }}
+  ok:
+    description: '"true" when nothing was at or above fail-on.'
+    value: ${{ steps.check.outputs.ok }}
+  behind:
+    description: 'Count of files behind the current templates.'
+    value: ${{ steps.check.outputs.behind }}
+  orphaned:
+    description: 'Count of files still on disk that are no longer part of the stack.'
+    value: ${{ steps.check.outputs.orphaned }}
+  edited:
+    description: 'Count of files edited by hand, which upgrade will not touch.'
+    value: ${{ steps.check.outputs.edited }}
+  report:
+    description: 'The full `check --json` payload.'
+    value: ${{ steps.check.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/scripts/run.mjs"
+      env:
+        # Underscores, not the hyphenated INPUT_* names @actions/core reads:
+        # a composite action does not get those automatically, so these are
+        # ordinary env vars, and hyphens in env keys are not worth the risk.
+        APB_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        APB_VERSION: ${{ inputs.version }}
+        APB_FAIL_ON: ${{ inputs.fail-on }}
+        APB_COMMENT: ${{ inputs.comment }}
+        GH_TOKEN: ${{ inputs.token }}
