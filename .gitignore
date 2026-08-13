@@ -1,2 +1,6 @@
 node_modules/
 *.tgz
+
+# Claude Code local state — worktrees are full checkouts, settings are per-machine
+.claude/worktrees/
+.claude/settings.local.json
