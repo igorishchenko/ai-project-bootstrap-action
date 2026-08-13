@@ -13,6 +13,7 @@
 import { appendFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { buildComment, buildSummary, COMMENT_MARKER } from './build-comment.mjs';
+import { pathToFileURL } from 'node:url';
 
 /** Exit code the CLI uses for "this is not a generated project". */
 const NOT_A_PROJECT = 2;
@@ -150,7 +151,7 @@ function prNumberFromEvent() {
   return match ? Number(match[1]) : undefined;
 }
 
-function main() {
+async function main() {
   const workingDirectory = input('WORKING_DIRECTORY', '.');
   const failOn = input('FAIL_ON', 'none');
   const version = input('VERSION', 'latest');
@@ -205,6 +206,8 @@ function main() {
     process.stdout.write('Not a pull request — reporting to the job summary only.\n');
   }
 
+  await reportToFleet(report);
+
   process.stdout.write(`${buildSummary(report)}\n`);
 
   // The CLI already applied --fail-on; mirroring its exit code keeps one
@@ -212,4 +215,65 @@ function main() {
   process.exit(failed ? 1 : 0);
 }
 
-main();
+/**
+ * Posts the report to a fleet endpoint, when one is configured.
+ *
+ * Off unless `report-to` is set: this is the only thing the action sends
+ * anywhere, and a CI step that quietly started talking to a service nobody
+ * configured would be a surprise of the worst kind.
+ *
+ * **Failing to report is a warning, never a failed job** — the same rule the
+ * missing-comment-permission case already follows, and for the same reason.
+ * Whether the rules have drifted is what this job answers, and a dashboard
+ * being unreachable says nothing about that.
+ *
+ * Only the payload the CLI produced is sent, and the service stores only counts
+ * and severities from it — no file paths, and no repository contents. See the
+ * backend's changelog for the exhaustive list.
+ */
+export async function reportToFleet(report) {
+  const url = (process.env.APB_REPORT_TO ?? '').trim();
+  if (!url) return;
+
+  const token = (process.env.APB_ORG_TOKEN ?? '').trim();
+  if (!token) {
+    process.stdout.write(
+      '::warning::report-to is set but no org token was provided. Pass `org-token` (a secret) alongside it.\n',
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ repo: process.env.GITHUB_REPOSITORY ?? 'unknown', report }),
+      // Bounded deliberately: this runs at the end of a CI step whose real work
+      // is already done, and a hanging POST would turn a green job into a slow
+      // one for no benefit.
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      process.stdout.write(
+        `::warning::Drift report was not accepted (${response.status}). The check itself ran.\n`,
+      );
+      return;
+    }
+    process.stdout.write('Reported drift to the fleet dashboard.\n');
+  } catch (error) {
+    process.stdout.write(
+      `::warning::Could not report drift: ${error.message}\nThe check itself ran.\n`,
+    );
+  }
+}
+
+/*
+ * Only when run as the action's entrypoint.
+ *
+ * `reportToFleet` is exported so a test can drive it, and a `main()` that fired
+ * on import would run the whole check — CLI install included — inside the test
+ * process. Compared against argv rather than gated on an environment variable,
+ * so `npm test` needs no special invocation to be safe.
+ */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

@@ -31,6 +31,21 @@ inputs:
     description: 'Post (and keep updating) a single comment on the pull request.'
     required: false
     default: 'true'
+  report-to:
+    description: >-
+      Where to POST the drift report, e.g.
+      https://api.ai-project-bootstrap.com/v1/fleet/reports. Off unless set —
+      this is the only thing the action sends anywhere. Needs `org-token`.
+      Reporting failures are warnings and never fail the job.
+    required: false
+    default: ''
+  org-token:
+    description: >-
+      An organisation token, from Settings → Organisation. Pass it as a secret.
+      Deliberately not a licence key: that is a person's credential, and a
+      machine should not hold one.
+    required: false
+    default: ''
   token:
     description: >-
       Token used to read and write the PR comment. Needs
@@ -78,4 +93,6 @@ runs:
         APB_VERSION: ${{ inputs.version }}
         APB_FAIL_ON: ${{ inputs.fail-on }}
         APB_COMMENT: ${{ inputs.comment }}
+        APB_REPORT_TO: ${{ inputs.report-to }}
+        APB_ORG_TOKEN: ${{ inputs.org-token }}
         GH_TOKEN: ${{ inputs.token }}

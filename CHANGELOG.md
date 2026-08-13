@@ -14,6 +14,19 @@ time.
 
 ### Added
 
+- **`report-to` and `org-token`** — post the drift report to a fleet dashboard
+  after the comment is rendered. **Off unless set**: this is the only thing the
+  action sends anywhere, and a CI step that quietly started talking to a service
+  nobody configured would be a surprise of the worst kind.
+- **Reporting can never fail the job.** An unreachable service, a wrong token,
+  a non-200 or a timeout is a `::warning::` and nothing more — the same rule the
+  missing-comment-permission case already follows, and for the same reason:
+  whether the rules have drifted is what this job answers, and a dashboard being
+  down says nothing about that. The POST is bounded at 10s so a hanging service
+  cannot turn a green job into a slow one.
+- **The token is an organisation token, not a licence key.** A licence key is a
+  person's credential; a machine should not hold one.
+
 - **Advisories in the comment.** Known vendor changes affecting the technologies
   a project selected — a breaking release, a deprecation, a moved default — now
   render alongside drift, closing the caveat this action shipped with. Nothing

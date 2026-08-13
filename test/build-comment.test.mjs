@@ -266,3 +266,151 @@ describe('advisories', () => {
     assert.ok(buildSummary(withAdvisories([advisory()])).includes('| Advisories | 1 |'));
   });
 });
+
+/**
+ * Fleet reporting.
+ *
+ * `reportToFleet` lives in `run.mjs`, which is the half that touches the
+ * network and the runner — so these drive it the way the runner does, through
+ * the environment, with `fetch` stubbed. What matters is not the request shape
+ * (the backend has its own tests for that) but that **no failure here can fail
+ * a job**: the check already ran, and a dashboard being unreachable says
+ * nothing about whether the rules have drifted.
+ */
+describe('reportToFleet', () => {
+  const originals = {
+    APB_REPORT_TO: process.env.APB_REPORT_TO,
+    APB_ORG_TOKEN: process.env.APB_ORG_TOKEN,
+    GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY,
+  };
+  let written;
+  let realWrite;
+  let realFetch;
+
+  function capture() {
+    written = [];
+    realWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk) => {
+      written.push(String(chunk));
+      return true;
+    };
+    realFetch = globalThis.fetch;
+  }
+
+  function restore() {
+    process.stdout.write = realWrite;
+    globalThis.fetch = realFetch;
+    for (const [key, value] of Object.entries(originals)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  /** Imported fresh each time so the module reads the current environment. */
+  async function load() {
+    const module = await import(`../scripts/run.mjs?fleet=${Math.random()}`);
+    return module;
+  }
+
+  test('does nothing at all when report-to is unset', async () => {
+    capture();
+    try {
+      delete process.env.APB_REPORT_TO;
+      let called = false;
+      globalThis.fetch = async () => {
+        called = true;
+        return { ok: true, status: 202 };
+      };
+      const { reportToFleet } = await load();
+      await reportToFleet({ counts: {} });
+
+      assert.equal(called, false);
+      assert.equal(written.join(''), '');
+    } finally {
+      restore();
+    }
+  });
+
+  test('warns rather than posting when the token is missing', async () => {
+    capture();
+    try {
+      process.env.APB_REPORT_TO = 'https://api.example.com/v1/fleet/reports';
+      delete process.env.APB_ORG_TOKEN;
+      let called = false;
+      globalThis.fetch = async () => {
+        called = true;
+        return { ok: true, status: 202 };
+      };
+      const { reportToFleet } = await load();
+      await reportToFleet({ counts: {} });
+
+      assert.equal(called, false);
+      assert.match(written.join(''), /::warning::/);
+      assert.match(written.join(''), /org token/i);
+    } finally {
+      restore();
+    }
+  });
+
+  test('posts the payload with the token', async () => {
+    capture();
+    try {
+      process.env.APB_REPORT_TO = 'https://api.example.com/v1/fleet/reports';
+      process.env.APB_ORG_TOKEN = 'apb_org_secret';
+      process.env.GITHUB_REPOSITORY = 'acme/checkout-web';
+      let seen;
+      globalThis.fetch = async (url, init) => {
+        seen = { url, init };
+        return { ok: true, status: 202 };
+      };
+      const { reportToFleet } = await load();
+      await reportToFleet({ counts: { behind: 2 }, severity: 'warning' });
+
+      assert.equal(seen.url, 'https://api.example.com/v1/fleet/reports');
+      assert.equal(seen.init.headers.authorization, 'Bearer apb_org_secret');
+      const body = JSON.parse(seen.init.body);
+      assert.equal(body.repo, 'acme/checkout-web');
+      assert.equal(body.report.severity, 'warning');
+    } finally {
+      restore();
+    }
+  });
+
+  /** The rule that matters: reporting failed, job still green. */
+  test('warns and returns when the service refuses', async () => {
+    capture();
+    try {
+      process.env.APB_REPORT_TO = 'https://api.example.com/v1/fleet/reports';
+      process.env.APB_ORG_TOKEN = 'apb_org_wrong';
+      globalThis.fetch = async () => ({ ok: false, status: 401 });
+      const { reportToFleet } = await load();
+
+      // Resolves — it does not throw, and nothing here can reach process.exit.
+      await reportToFleet({ counts: {} });
+
+      assert.match(written.join(''), /::warning::/);
+      assert.match(written.join(''), /401/);
+    } finally {
+      restore();
+    }
+  });
+
+  test('warns and returns when the network fails', async () => {
+    capture();
+    try {
+      process.env.APB_REPORT_TO = 'https://api.example.com/v1/fleet/reports';
+      process.env.APB_ORG_TOKEN = 'apb_org_secret';
+      globalThis.fetch = async () => {
+        throw new Error('getaddrinfo ENOTFOUND');
+      };
+      const { reportToFleet } = await load();
+
+      await reportToFleet({ counts: {} });
+
+      assert.match(written.join(''), /::warning::/);
+      assert.match(written.join(''), /ENOTFOUND/);
+    } finally {
+      restore();
+    }
+  });
+});
