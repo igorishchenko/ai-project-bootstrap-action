@@ -159,3 +159,110 @@ describe('buildSummary', () => {
     assert.match(summary, /checkout-web/);
   });
 });
+
+/**
+ * Advisories, added in the CLI release that made `critical` reachable.
+ *
+ * The `report()` helper above deliberately produces a payload with **no**
+ * `advisories` field at all — which is exactly what a CLI too old to know about
+ * them emits. Every pre-existing test in this file therefore doubles as the
+ * old-payload compatibility test, and the ones below only have to cover what is
+ * new.
+ */
+function advisory(overrides = {}) {
+  return { id: 'supabase-auth-v2', severity: 'warning', publishedAt: '2026-01-15', ...overrides };
+}
+
+function withAdvisories(items, entitled = true, overrides = {}) {
+  return report({ ...overrides, advisories: { entitled, total: items.length, items } });
+}
+
+describe('advisories', () => {
+  test('renders nothing at all for a CLI too old to report them', () => {
+    // No `advisories` key whatsoever — the shape every released CLI emits today.
+    const body = buildComment(report({ counts: { behind: 1 }, behind: ['docs/setup.md'] }));
+    assert.ok(!body.includes('Advisories'));
+    assert.ok(body.includes('docs/setup.md'));
+  });
+
+  test('renders nothing when the CLI looked and found none', () => {
+    const body = buildComment(
+      withAdvisories([], true, { counts: { behind: 1 }, behind: ['docs/setup.md'] }),
+    );
+    assert.ok(!body.includes('Advisories'));
+  });
+
+  test('treats an explicit null as not asked', () => {
+    const body = buildComment(
+      report({ advisories: null, counts: { behind: 1 }, behind: ['docs/setup.md'] }),
+    );
+    assert.ok(!body.includes('Advisories'));
+  });
+
+  test('shows the summary and links the source when entitled', () => {
+    const body = buildComment(
+      withAdvisories([
+        advisory({ summary: 'Supabase Auth moved a method in v2.', url: 'https://example.com/a' }),
+      ]),
+    );
+
+    assert.ok(body.includes('**Advisories** — 1 known vendor change'));
+    assert.ok(body.includes('[Supabase Auth moved a method in v2.](https://example.com/a)'));
+    assert.ok(body.includes('`warning`'));
+  });
+
+  /** One line, no pitch. This lands in somebody's pull request. */
+  test('shows ids and one quiet line when not entitled', () => {
+    const body = buildComment(
+      withAdvisories([advisory({ severity: 'critical' })], false),
+    );
+
+    assert.ok(body.includes('`critical`'));
+    assert.ok(body.includes('`supabase-auth-v2`'));
+    assert.ok(body.includes('ai-project-bootstrap login'));
+    // Never the text, and never more than one line about subscribing.
+    assert.equal(body.split('\n').filter((l) => l.includes('subscription')).length, 1);
+  });
+
+  /**
+   * A repository whose files are all current but whose vendor just shipped a
+   * breaking change is not "clean" in any sense the reader cares about.
+   */
+  test('posts a comment on a file-clean repo when an advisory applies', () => {
+    const body = buildComment(withAdvisories([advisory()]));
+
+    assert.ok(body !== null);
+    assert.ok(body.includes(COMMENT_MARKER));
+    assert.ok(body.includes('**Advisories**'));
+  });
+
+  test('says so in the headline rather than claiming everything is current', () => {
+    assert.equal(
+      headline(withAdvisories([advisory(), advisory({ id: 'other' })])),
+      'AI rules are current · 2 advisories',
+    );
+    assert.equal(headline(withAdvisories([advisory()])), 'AI rules are current · 1 advisory');
+    assert.equal(headline(report()), 'AI rules are current');
+  });
+
+  test('appends to a drift headline rather than replacing it', () => {
+    assert.equal(
+      headline(withAdvisories([advisory()], true, { counts: { behind: 2 } })),
+      'AI rules: 2 files behind, 1 advisory',
+    );
+  });
+
+  test('caps the list and says how many were left out', () => {
+    const many = Array.from({ length: 8 }, (_, i) => advisory({ id: `a-${i}`, summary: `Note ${i}` }));
+    const body = buildComment(withAdvisories(many));
+
+    assert.ok(body.includes('…and 3 more'));
+    assert.ok(body.includes('Note 4'));
+    assert.ok(!body.includes('Note 5'));
+  });
+
+  test('adds a summary row only when the CLI reported them', () => {
+    assert.ok(!buildSummary(report()).includes('Advisories'));
+    assert.ok(buildSummary(withAdvisories([advisory()])).includes('| Advisories | 1 |'));
+  });
+});
