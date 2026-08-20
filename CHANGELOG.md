@@ -12,7 +12,35 @@ time.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Advisories in the comment.** Known vendor changes affecting the technologies
+  a project selected — a breaking release, a deprecation, a moved default — now
+  render alongside drift, closing the caveat this action shipped with. Nothing
+  about severity is computed here: `check` ranked them and `check` decided
+  whether the job fails, so the action cannot disagree with the command it
+  wraps.
+- **`advisories` and `advisories-critical` outputs**, so a workflow can branch
+  on them without parsing the payload.
+- A file-clean repository whose vendor just shipped a breaking change **now gets
+  a comment**. It is not "clean" in any sense the reader cares about, and
+  staying silent about it is the one failure this feature exists to prevent.
+
+### Compatibility
+
+- **A CLI too old to report advisories renders exactly as before**, and the new
+  outputs report `0`. The action floats on `version: latest`, but pinning an
+  older one stays safe — a missing field and an explicit `null` both mean "not
+  asked". Every pre-existing test in `test/build-comment.test.mjs` uses a
+  payload with no advisory field at all, so they collectively hold that line.
+- No new inputs, no changed outputs, no dependencies, still no build step.
+
+### Notes
+
+- Without a subscription the comment names how many advisories match and how
+  severe they are, but not what they say, and points at
+  `ai-project-bootstrap login` in **one** line. This lands in somebody's pull
+  request, where an advertisement is a reason to turn the action off.
 
 ## [1.0.0] — 2026-08-13
 

@@ -163,6 +163,18 @@ function main() {
   setOutput('behind', String(report.counts.behind));
   setOutput('orphaned', String(report.counts.orphaned));
   setOutput('edited', String(report.counts.edited));
+  /*
+   * Counted here rather than in the comment builder so a workflow can branch on
+   * advisories without parsing the payload. `0` for a CLI too old to emit the
+   * field — the same value a current CLI gives when nothing matched, which is
+   * the right answer for a workflow step either way.
+   */
+  const advisoryItems = Array.isArray(report.advisories?.items) ? report.advisories.items : [];
+  setOutput('advisories', String(advisoryItems.length));
+  setOutput(
+    'advisories-critical',
+    String(advisoryItems.filter((a) => a.severity === 'critical').length),
+  );
   setOutput('report', JSON.stringify(report));
 
   if (process.env.GITHUB_STEP_SUMMARY) {

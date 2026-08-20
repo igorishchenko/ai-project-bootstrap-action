@@ -54,6 +54,12 @@ outputs:
   edited:
     description: 'Count of files edited by hand, which upgrade will not touch.'
     value: ${{ steps.check.outputs.edited }}
+  advisories:
+    description: 'Count of known vendor changes affecting this stack. 0 on a CLI too old to report them.'
+    value: ${{ steps.check.outputs.advisories }}
+  advisories-critical:
+    description: 'How many of those are critical.'
+    value: ${{ steps.check.outputs.advisories-critical }}
   report:
     description: 'The full `check --json` payload.'
     value: ${{ steps.check.outputs.report }}

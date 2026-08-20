@@ -103,14 +103,16 @@ stay that way.
 
 ## Outputs
 
-| Output     | Example                          |
-| ---------- | -------------------------------- |
-| `severity` | `warning`                        |
-| `ok`       | `true` / `false`                 |
-| `behind`   | `6`                              |
-| `orphaned` | `1`                              |
-| `edited`   | `2`                              |
-| `report`   | the full `check --json` payload  |
+| Output                 | Example                         |
+| ---------------------- | ------------------------------- |
+| `severity`             | `warning`                       |
+| `ok`                   | `true` / `false`                |
+| `behind`               | `6`                             |
+| `orphaned`             | `1`                             |
+| `edited`               | `2`                             |
+| `advisories`           | `2`                             |
+| `advisories-critical`  | `1`                             |
+| `report`               | the full `check --json` payload |
 
 ```yaml
 - uses: igorishchenko/ai-project-bootstrap-action@v1
@@ -118,6 +120,29 @@ stay that way.
 - if: steps.rules.outputs.behind != '0'
   run: echo "::notice::${{ steps.rules.outputs.behind }} rule files are stale"
 ```
+
+## Advisories
+
+The comment also reports **known vendor changes affecting the technologies this
+project selected** — a breaking release, a deprecation, a default that moved.
+The CLI fetches them; this action only renders what it was given.
+
+Nothing about severity is decided here. `check` already ranked the advisories
+and already decided whether the job fails, so the action cannot disagree with
+the command it wraps.
+
+Three things are worth knowing:
+
+- **A `critical` advisory can fail the job**, if `fail-on` is set that high.
+  That means somebody else publishing a change can turn this red with no commit
+  on your side. `fail-on` still defaults to `none`.
+- **Without a subscription** the comment names how many advisories match and how
+  severe they are, but not what they say. One quiet line points at
+  `ai-project-bootstrap login`. It is deliberately not a pitch — this lands in
+  your pull requests.
+- **A CLI too old to report advisories changes nothing.** The comment renders
+  exactly as it did before, and `advisories` reports `0`. The action floats on
+  `version: latest`, but pinning an older one is safe.
 
 ## Weekly refresh pull requests
 
