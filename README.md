@@ -98,10 +98,14 @@ straight through and the CLI's own exit code decides the outcome:
 | `none`     | nothing — report only (default)                                |
 | `info`     | a newer CLI version, new files, newly supported AI tools       |
 | `warning`  | rules behind the templates, or orphaned files                  |
-| `critical` | reserved; nothing emits it yet                                 |
+| `critical` | a `critical` advisory (CLI 1.4.0 and later)                     |
 
 Start on `none`. Move to `warning` once the repo is current and you want it to
 stay that way.
+
+`critical` was unreachable before CLI 1.4.0. It now means somebody else's
+published advisory can turn your build red with no commit on your side — which
+is the point of it, and worth deciding deliberately rather than discovering.
 
 ## Outputs
 
