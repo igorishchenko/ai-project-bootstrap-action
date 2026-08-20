@@ -81,6 +81,8 @@ Three things it deliberately does not do:
 | `version`           | `latest`         | Which CLI release to check against — see below              |
 | `fail-on`           | `none`           | `none`, `info`, `warning`, `critical`                       |
 | `comment`           | `true`           | Post and keep updating one PR comment                       |
+| `report-to`            | `''`      | Where to POST the drift report. Off unless set.            |
+| `org-token`            | `''`      | Organisation token for `report-to`. Pass as a secret.      |
 | `token`             | `${{ github.token }}` | Needs `pull-requests: write` to comment              |
 
 **`version` defaults to `latest` on purpose.** Drift is measured against the
@@ -120,6 +122,33 @@ stay that way.
 - if: steps.rules.outputs.behind != '0'
   run: echo "::notice::${{ steps.rules.outputs.behind }} rule files are stale"
 ```
+
+## Reporting to a fleet dashboard
+
+Off unless you set it. `report-to` is the only thing this action sends anywhere.
+
+```yaml
+- uses: igorishchenko/ai-project-bootstrap-action@v1
+  with:
+    report-to: https://api.ai-project-bootstrap.com/v1/fleet/reports
+    org-token: ${{ secrets.APB_ORG_TOKEN }}
+```
+
+The token comes from **Settings → Organisation** in the dashboard. It is
+deliberately **not** a licence key: a licence key is a person's credential, and
+a machine holding one means CI spends somebody's allowance and revoking it logs
+a human out of everything. An org token does one thing and is revoked on its
+own.
+
+**Only counts and severities are stored** — no file paths, and no repository
+contents. The `check --json` payload carries the paths; the service throws them
+away, because a path tree is a fair sketch of a private codebase and the
+dashboard's question is answered by counts. The backend's changelog has the
+exhaustive list of what is retained.
+
+**Reporting can never fail your job.** An unreachable service, a wrong token or
+a timeout is a `::warning::` and nothing more — whether your rules have drifted
+is what this job answers, and a dashboard being down says nothing about that.
 
 ## Advisories
 
