@@ -242,6 +242,39 @@ describe('advisories', () => {
    * under a headline reading "AI rules are current" — the reader believes one
    * of the two, and the wrong one was in bold.
    */
+  /**
+   * `newAiTools` ranks `info` in the CLI, so `fail-on: info` turns the build
+   * red over it. The action never read the field, so that job failed with no
+   * comment at all — every other signal was clean, so `buildComment` returned
+   * null. A red build whose report says nothing is the worst thing this action
+   * can do.
+   */
+  test('explains a failing job whose only finding is an unwired AI tool', () => {
+    const body = buildComment(report({ newAiTools: ['copilot', 'roo'], ok: false, failOn: 'info' }));
+
+    assert.ok(body !== null, 'a failing job must never be silent');
+    assert.match(body, /2 AI tools not wired up/);
+    assert.match(body, /`copilot` · `roo`/);
+  });
+
+  /**
+   * And the other half: the list never changes on its own, so treating it like
+   * drift would put the same comment on every pull request forever — for a
+   * project that deliberately does not want those tools.
+   */
+  test('stays quiet about unwired tools when the job passed', () => {
+    assert.equal(buildComment(report({ newAiTools: ['copilot'], ok: true })), null);
+    // No `ok` at all is an older CLI, which keeps the behaviour it had.
+    assert.equal(buildComment(report({ newAiTools: ['copilot'] })), null);
+  });
+
+  /** The fix is not `upgrade` alone — `aiTools` is an answer, not a file. */
+  test('sends the reader to aiTools rather than round an upgrade loop', () => {
+    const body = buildComment(report({ newAiTools: ['copilot'], ok: false }));
+
+    assert.match(body, /Add them to `aiTools` in `ai-project\.config\.json`/);
+  });
+
   test('does not claim files have drifted when only an advisory applies', () => {
     const body = buildComment(withAdvisories([advisory()]));
 

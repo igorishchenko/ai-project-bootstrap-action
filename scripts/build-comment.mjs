@@ -39,6 +39,22 @@ function advisoriesOf(report) {
   return { entitled: raw.entitled === true, items: raw.items };
 }
 
+/**
+ * Newly-supported AI tools this project never opted into.
+ *
+ * The CLI ranks a non-empty list `info`, which means `fail-on: info` fails the
+ * job over it — and until this was read here, that job failed with no comment
+ * at all, because every other signal was clean. A red build whose report says
+ * nothing is the worst thing this action can do.
+ *
+ * Tolerated the same way advisories are: a CLI too old to emit the field is
+ * indistinguishable from one that emitted an empty list, and neither produces
+ * a section.
+ */
+function newAiToolsOf(report) {
+  return Array.isArray(report.newAiTools) ? report.newAiTools : [];
+}
+
 /** `1 file` / `3 files`, because "1 files" in a bot comment looks broken. */
 function plural(n, singular, pluralForm = `${singular}s`) {
   return `${n} ${n === 1 ? singular : pluralForm}`;
@@ -61,11 +77,16 @@ export function headline(report) {
   const advisories = advisoriesOf(report);
   const advisoryCount = advisories ? advisories.items.length : 0;
 
+  const toolCount = newAiToolsOf(report).length;
+
   if (behind === 0 && orphaned === 0 && missing === 0 && added === 0) {
     // Files current, vendor not. Saying only "current" above a list of vendor
     // changes would read as the report contradicting itself.
-    return advisoryCount > 0
-      ? `AI rules are current · ${plural(advisoryCount, 'advisory', 'advisories')}`
+    const extras = [];
+    if (advisoryCount > 0) extras.push(plural(advisoryCount, 'advisory', 'advisories'));
+    if (toolCount > 0) extras.push(`${plural(toolCount, 'AI tool')} not wired up`);
+    return extras.length > 0
+      ? `AI rules are current · ${extras.join(', ')}`
       : 'AI rules are current';
   }
   const parts = [];
@@ -74,6 +95,7 @@ export function headline(report) {
   if (missing > 0) parts.push(`${plural(missing, 'file')} missing`);
   if (added > 0) parts.push(`${plural(added, 'new file')}`);
   if (advisoryCount > 0) parts.push(plural(advisoryCount, 'advisory', 'advisories'));
+  if (toolCount > 0) parts.push(`${plural(toolCount, 'AI tool')} not wired up`);
   return `AI rules: ${parts.join(', ')}`;
 }
 
@@ -98,7 +120,23 @@ export function buildComment(report, options = {}) {
   const filesClean = behind === 0 && orphaned === 0 && missing === 0 && added === 0;
   const clean = filesClean && !hasAdvisories;
 
-  if (clean && !options.editingExisting) return null;
+  /*
+   * Newly-supported tools do not, on their own, earn a comment.
+   *
+   * The list never changes until somebody edits `aiTools`, so treating it like
+   * drift would put the same comment on every pull request this repository
+   * ever opens — for a project that deliberately does not want Copilot rules,
+   * forever. Advisories are different: they arrive, and they go away.
+   *
+   * What it must never do is fail a job silently. `fail-on: info` ranks this
+   * `info` and turns the build red, so when the CLI says the run did not pass,
+   * the comment is posted and the section below says why. `ok` is undefined on
+   * a CLI too old to report it, which is treated as passing — an old CLI keeps
+   * exactly the behaviour it had.
+   */
+  const failed = report.ok === false;
+
+  if (clean && !failed && !options.editingExisting) return null;
 
   const lines = [COMMENT_MARKER, `### ${headline(report)}`, ''];
 
@@ -152,6 +190,7 @@ export function buildComment(report, options = {}) {
   }
 
   lines.push(...advisorySection(report));
+  lines.push(...newAiToolsSection(report));
 
   /*
    * Edited files are stated as a guarantee, not a warning. Someone scanning a
@@ -218,6 +257,29 @@ function advisorySection(report) {
   return lines;
 }
 
+/**
+ * The one finding whose fix is not `upgrade`.
+ *
+ * `aiTools` is an answer in `ai-project.config.json`, not a file on disk, so
+ * refreshing changes nothing until the list itself is edited. Printing the
+ * usual upgrade command here would send a reader round a loop that cannot
+ * terminate — the CLI's own reporter says the same two things in the same
+ * order, deliberately.
+ */
+function newAiToolsSection(report) {
+  const tools = newAiToolsOf(report);
+  if (tools.length === 0) return [];
+
+  return [
+    `**Not wired up** — ${plural(tools.length, 'AI tool')} this version can write rules for, that this project never opted into`,
+    '',
+    tools.map((tool) => `\`${tool}\``).join(' · '),
+    '',
+    `_Add them to \`aiTools\` in \`ai-project.config.json\`, then run \`upgrade\`. Nothing is written for a tool nobody asked for._`,
+    '',
+  ];
+}
+
 function version(report) {
   const { recorded, installed } = report.generatorVersion;
   if (!recorded) return `checked against v${installed}`;
@@ -241,6 +303,8 @@ export function buildSummary(report) {
 
   const advisories = advisoriesOf(report);
   if (advisories) rows.push(['Advisories', advisories.items.length]);
+  const tools = newAiToolsOf(report);
+  if (tools.length > 0) rows.push(['AI tools not wired up', tools.length]);
 
   return [
     `## ${headline(report)}`,

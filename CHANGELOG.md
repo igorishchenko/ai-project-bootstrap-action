@@ -14,6 +14,19 @@ time.
 
 ### Fixed
 
+- **`fail-on: info` could fail a job with no comment explaining why.** The CLI
+  ranks newly-supported AI tools `info`, so a repository whose files were
+  entirely current still went red — and the action never read `newAiTools`, so
+  every signal it *did* read was clean and it posted nothing. A red build whose
+  report says nothing is the worst thing this action can do. It now says which
+  tools, and that the fix is editing `aiTools` in `ai-project.config.json`
+  rather than running `upgrade`, which on its own changes nothing.
+  Deliberately **not** treated as drift: the list never changes until somebody
+  edits that answer, so commenting whenever it is non-empty would put the same
+  note on every pull request forever, for a project that has decided it does
+  not want those tools. It earns a comment when the job fails, and rides along
+  in one that exists for another reason. A CLI too old to report `ok` is
+  treated as passing, so nothing changes for a pinned older version.
 - **A file-clean repository with an advisory was told its files had drifted.**
   An advisory is what gets a comment posted on an otherwise-current repository
   — that part was deliberate — but the opening line underneath was the drift
