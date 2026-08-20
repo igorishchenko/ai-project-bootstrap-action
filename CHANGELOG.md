@@ -12,13 +12,15 @@ time.
 
 ## [Unreleased]
 
-Nothing yet. Entries are added in the pull request that makes the change, not
-at release time.
-
-## [1.1.0] — 2026-08-20
-
 ### Fixed
 
+- **The `fail-on` table said `critical` was unreachable.** True when it was
+  written, and false from CLI 1.4.0, where a `critical` advisory raises the
+  whole report. The action passes `fail-on` straight through and the CLI's exit
+  code decides the outcome, so a wrong table here is a wrong answer about
+  somebody's build — and this one understated it: `critical` now means another
+  person's published advisory can turn your build red with no commit on your
+  side.
 - **`fail-on: info` could fail a job with no comment explaining why.** The CLI
   ranks newly-supported AI tools `info`, so a repository whose files were
   entirely current still went red — and the action never read `newAiTools`, so
