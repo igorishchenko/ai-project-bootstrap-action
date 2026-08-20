@@ -12,6 +12,17 @@ time.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A file-clean repository with an advisory was told its files had drifted.**
+  An advisory is what gets a comment posted on an otherwise-current repository
+  — that part was deliberate — but the opening line underneath was the drift
+  sentence, directly below a headline reading "AI rules are current". The
+  reader believes one of the two, and the wrong one was in bold. The opening
+  line is now chosen by the file counts alone. Caught by running the action's
+  comment builder against a real `check --json` payload from the CLI 1.4.0,
+  which is also the release that made the advisory path reachable in practice.
+
 ### Added
 
 - **`report-to` and `org-token`** — post the drift report to a fleet dashboard

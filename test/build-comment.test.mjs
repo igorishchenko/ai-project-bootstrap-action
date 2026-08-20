@@ -236,6 +236,19 @@ describe('advisories', () => {
     assert.ok(body.includes('**Advisories**'));
   });
 
+  /**
+   * The advisory is what got the comment posted; the files are still current,
+   * and the opening line has to say so. It used to say the opposite, directly
+   * under a headline reading "AI rules are current" — the reader believes one
+   * of the two, and the wrong one was in bold.
+   */
+  test('does not claim files have drifted when only an advisory applies', () => {
+    const body = buildComment(withAdvisories([advisory()]));
+
+    assert.match(body, /Every generated file matches the templates/);
+    assert.doesNotMatch(body, /no longer match what the generator would write/);
+  });
+
   test('says so in the headline rather than claiming everything is current', () => {
     assert.equal(
       headline(withAdvisories([advisory(), advisory({ id: 'other' })])),

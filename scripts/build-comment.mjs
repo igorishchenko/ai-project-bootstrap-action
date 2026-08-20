@@ -95,14 +95,24 @@ export function buildComment(report, options = {}) {
    * any sense the reader cares about, and staying silent about it would be the
    * one failure this feature exists to prevent.
    */
-  const clean =
-    behind === 0 && orphaned === 0 && missing === 0 && added === 0 && !hasAdvisories;
+  const filesClean = behind === 0 && orphaned === 0 && missing === 0 && added === 0;
+  const clean = filesClean && !hasAdvisories;
 
   if (clean && !options.editingExisting) return null;
 
   const lines = [COMMENT_MARKER, `### ${headline(report)}`, ''];
 
-  if (clean) {
+  /*
+   * Which opening line, decided by the *files* alone.
+   *
+   * `clean` is false when an advisory applies, which is what makes the comment
+   * get posted at all — but the drift sentence below is about files, and a
+   * file-clean repository with an advisory used to get it anyway: a comment
+   * headed "AI rules are current" whose next line said they no longer match.
+   * The reader believes one of the two, and the wrong one is right there in
+   * bold.
+   */
+  if (filesClean) {
     // The trailing blank matters: without it Markdown folds this into the
     // same paragraph as the `<sub>` note below.
     lines.push(`Every generated file matches the templates in ${version(report)}.`, '');
