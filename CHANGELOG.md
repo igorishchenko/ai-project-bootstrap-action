@@ -12,6 +12,11 @@ time.
 
 ## [Unreleased]
 
+Nothing yet. Entries are added in the pull request that makes the change, not
+at release time.
+
+## [1.1.0] — 2026-08-20
+
 ### Fixed
 
 - **The `fail-on` table said `critical` was unreachable.** True when it was
