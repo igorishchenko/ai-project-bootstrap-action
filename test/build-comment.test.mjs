@@ -287,12 +287,24 @@ describe('reportToFleet', () => {
   let realWrite;
   let realFetch;
 
+  /**
+   * Records what the action writes — and forwards it, which is the part that
+   * matters. On Node 20 the test runner emits its own TAP stream through this
+   * same `process.stdout.write` while a test is running, so a stub that
+   * swallows chunks swallows the runner's output too: the stream arrives
+   * truncated and the run fails with a subtest count that never adds up.
+   * Node 22 buffers TAP differently and hides it, which is how this passed
+   * locally and failed in CI.
+   *
+   * Forwarding means `written` also holds that TAP noise, so assertions here
+   * look for the action's own markers rather than comparing the whole buffer.
+   */
   function capture() {
     written = [];
     realWrite = process.stdout.write.bind(process.stdout);
     process.stdout.write = (chunk) => {
       written.push(String(chunk));
-      return true;
+      return realWrite(chunk);
     };
     realFetch = globalThis.fetch;
   }
@@ -325,7 +337,8 @@ describe('reportToFleet', () => {
       await reportToFleet({ counts: {} });
 
       assert.equal(called, false);
-      assert.equal(written.join(''), '');
+      // Nothing of the action's own: no warning, and no success line either.
+      assert.doesNotMatch(written.join(''), /::warning::|Reported drift/);
     } finally {
       restore();
     }
