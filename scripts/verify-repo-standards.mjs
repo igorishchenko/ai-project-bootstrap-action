@@ -393,9 +393,14 @@ function checkTags(kind) {
   if (tags === null) return;
   const list = tags.split('\n').filter(Boolean);
   if (list.length === 0) {
-    warn('R5', 'no vX.Y.Z tags yet');
+    // A web repo deploys from main and is never tagged (R6), so having none is correct
+    // rather than pending.
+    if (kind === 'web') pass('R5', 'no tags, and a web repo takes none — it deploys from main');
+    else warn('R5', 'no vX.Y.Z tags yet');
     return;
   }
+  if (kind === 'web')
+    warn('R5', `a web repo has ${list.length} v* tag(s) — R6 says it deploys from main and is not released by a tag`);
   // R5's one standing exception: an Action's consumers pin `@v1`, so a bare major tag
   // exists and moves. It is allowed here and nowhere else, and only alongside a real vX.Y.Z.
   const movingMajor = kind === 'action' ? /^v\d+$/ : /^$/;
