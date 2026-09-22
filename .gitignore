@@ -4,3 +4,9 @@ node_modules/
 # Claude Code local state — worktrees are full checkouts, settings are per-machine
 .claude/worktrees/
 .claude/settings.local.json
+
+# Credentials, never committed — R7. The standard check fails if one is tracked.
+.env
+.env.local
+.env.*.local
+secrets/

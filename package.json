@@ -1,6 +1,10 @@
 {
   "name": "ai-project-bootstrap-action",
   "version": "1.1.0",
+  "workspace": {
+    "kind": "action",
+    "product": "ai-project-bootstrap"
+  },
   "private": true,
   "description": "GitHub Action reporting when a repo's generated AI coding rules have drifted from what ai-project-bootstrap would write today.",
   "type": "module",

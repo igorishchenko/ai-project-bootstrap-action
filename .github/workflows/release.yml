@@ -1,0 +1,73 @@
+name: Release
+
+# R6: the tag is the release. Cut it with the `cut-release` skill — release/X.Y.Z branch,
+# `chore: release vX.Y.Z`, Ihor merges, annotated tag on main, `git push origin vX.Y.Z`.
+#
+# **This does not move `v1`.** Every consumer pins `@v1`, so repointing it is what actually
+# ships, and R5 makes that Ihor's word rather than a side effect of pushing a tag. The
+# summary below says so and gives him the command.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+
+      - name: The tag matches package.json, and is on main
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          [ "$tag" = "$pkg" ] || {
+            echo "::error::tag $GITHUB_REF_NAME and package.json $pkg disagree (R4/R5)"
+            exit 1
+          }
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error::this tag is not on main — R5: tags are cut on main only"
+            exit 1
+          }
+
+      - uses: actions/setup-node@v5
+        with: { node-version: '20' }
+      # No install step: the action has no dependencies, which is the point.
+      - run: npm test
+
+      - name: Cut the GitHub Release from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # A release that tags vX.Y.Z and forgets to repoint v1 has shipped nothing, so the
+      # run says out loud what is still outstanding rather than looking finished.
+      - name: Say that `v1` has not moved
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          {
+            echo "### \`$major\` has **not** been moved"
+            echo
+            echo "Consumers pin \`@$major\`, so this release is not live until it does."
+            echo "That is Ihor's to do (R5 — a moving major tag is this repo's one exception):"
+            echo
+            echo '```bash'
+            echo "git tag -f $major $GITHUB_REF_NAME^{} && git push origin -f $major"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
