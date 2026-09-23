@@ -65,23 +65,61 @@ const git = (...a) => {
 };
 
 /**
- * Does anything here read a variable a PERSON has to set? That is what `.env.example`
- * documents. Variables the runner or the toolchain provides — GITHUB_*, CI, NODE_ENV — are
- * nobody's to configure, so a repo that only reads those owes no example file.
+ * Variables the runner or the toolchain provides. Nobody configures these, so they are not
+ * what R7's "every configurable variable by name" is about.
  */
-const PROVIDED_ENV = /^(GITHUB_|RUNNER_|CI$|NODE_ENV$|npm_|VERCEL_|RAILWAY_)/;
+const PROVIDED_ENV =
+  /^(GITHUB_|RUNNER_|CI$|NODE_ENV$|npm_|VERCEL_|RAILWAY_|PORT$|HOME$|PATH$|TZ$|LANG$|LC_|VITEST|JEST_|EXPO_OS$|NEXT_RUNTIME$)/;
 
-function readsEnv() {
+/** Every environment variable this repo reads that somebody has to set. */
+function configEnvVars() {
+  const names = new Set();
   for (const dir of ['src', 'scripts', 'lib', 'app']) {
     if (!has(dir)) continue;
     for (const file of filesUnder(dir)) {
       if (!/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file)) continue;
-      for (const [, name] of (read(file) ?? '').matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
-        if (!PROVIDED_ENV.test(name)) return true;
-      }
+      const body = read(file) ?? '';
+      for (const [, name] of body.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g))
+        if (!PROVIDED_ENV.test(name)) names.add(name);
+      for (const [, name] of body.matchAll(/process\.env\[['"]([A-Z][A-Z0-9_]*)['"]\]/g))
+        if (!PROVIDED_ENV.test(name)) names.add(name);
     }
   }
-  return false;
+  return [...names].sort();
+}
+
+/**
+ * R7 asks that every configurable value is documented **by name**, in the file its audience
+ * reads. Which file that is depends on who the audience is:
+ *
+ *   mobile / web / service   a developer setting the repo up  →  .env.example
+ *   package                  someone installing it from npm   →  README.md / USAGE.md
+ *   action                   someone writing a workflow       →  action.yml's inputs
+ *
+ * Checking the names rather than the file's existence is the stronger test: an .env.example
+ * that exists and is three variables out of date passes the weaker one.
+ */
+function checkEnvDocumented(kind) {
+  const vars = configEnvVars();
+  const surfaces =
+    kind === 'package'
+      ? ['README.md', 'USAGE.md', '.env.example']
+      : kind === 'action'
+        ? ['action.yml', 'README.md', '.env.example']
+        : ['.env.example'];
+  const docs = surfaces.map((f) => read(f) ?? '').join('\n');
+
+  if (vars.length === 0) {
+    pass('R7', 'nothing here reads configuration from the environment');
+    return;
+  }
+  const undocumented = vars.filter((name) => !docs.includes(name));
+  if (undocumented.length === 0) {
+    pass('R7', `${vars.length} environment variable(s), each documented in ${surfaces.find((f) => has(f)) ?? surfaces[0]}`);
+    return;
+  }
+  for (const name of undocumented)
+    fail('R7', `${name} is read from the environment but documented in none of ${surfaces.join(', ')}`);
 }
 
 // ── R0 · Repo kinds ──────────────────────────────────────────────────────────────
@@ -139,16 +177,13 @@ function checkLayout(kind) {
       pass('R7', 'CHANGELOG.md not required for a web repo — it deploys from main');
       continue;
     }
-    // .env.example exists so every configurable value is documented by name. An Action
-    // documents its values in action.yml's `inputs`, which is the file its consumers
-    // actually read — the APB_* variables its script reads are how the runner passes those
-    // inputs in, not something a person sets. A second file would be a second place to
-    // forget. A CLI or a package may equally have no configuration at all.
-    if (file === '.env.example' && (kind === 'package' || kind === 'action') && !has(file)) {
-      if (kind === 'action' && /^inputs:/m.test(read('action.yml') ?? ''))
-        pass('R7', "action.yml's inputs document this action's configuration — no .env.example owed");
-      else if (readsEnv()) fail('R7', '.env.example is missing, and the source reads configuration from the environment');
-      else pass('R7', '.env.example not required — nothing here reads configuration');
+    // A package's and an action's configuration is documented where their audience reads
+    // it — the README on npm, `inputs` in action.yml — not in a .env file neither of them
+    // loads. `checkEnvDocumented` holds them to naming every variable; requiring the file
+    // as well would be a second place to forget, and would imply a dotenv that is not read.
+    if (file === '.env.example' && (kind === 'package' || kind === 'action')) {
+      if (has(file)) pass('R7', '.env.example present');
+      else pass('R7', `a ${kind} repo documents its variables in its README — see R7 below`);
       continue;
     }
     if (has(file)) pass('R7', `${file} present`);
@@ -442,6 +477,7 @@ checkLayout(kind);
 checkSecrets(kind);
 checkVersions(kind);
 checkChangelog(kind);
+checkEnvDocumented(kind);
 checkWeb(kind, pkg);
 checkWorkflows(kind);
 checkBranchAndCommits();
