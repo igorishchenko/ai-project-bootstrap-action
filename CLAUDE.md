@@ -42,7 +42,9 @@ README agree, and that the example workflows are still valid.
 
 ## Branches, commits, changelog
 
-- Branch off `main`: `feat/…`, `fix/…`, `chore/…`, `docs/…`.
+- **`develop` is development and testing, `main` is production** (standard R1).
+  Branch off `develop`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, and open the PR
+  against it. Only `release/X.Y.Z` and `hotfix/X.Y.Z` go into `main`.
 - Conventional Commits.
 - Behaviour changes get an entry under `## [Unreleased]` in @CHANGELOG.md in
   the PR that makes them.

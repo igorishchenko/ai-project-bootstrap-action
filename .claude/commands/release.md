@@ -15,9 +15,9 @@ a new moving tag (`v2`), never a change under `v1`** — everyone is pinned at
 ## 1. Preflight
 
 ```bash
-git switch main && git pull
+git switch develop && git pull
 git status --short                     # clean
-gh run list --branch main --limit 1    # green
+gh run list --branch develop --limit 1 # green
 ```
 
 Run `/verify`.
@@ -33,7 +33,7 @@ with a fresh empty Unreleased above it) and package.json's `version`. Then:
 
 ```bash
 git commit -m "chore: release vX.Y.Z"
-git push -u origin release/X.Y.Z && gh pr create --fill
+git push -u origin release/X.Y.Z && gh pr create --base main --fill
 ```
 
 Merge once CI is green.
@@ -54,6 +54,16 @@ Confirm both landed:
 ```bash
 git ls-remote --tags origin | grep -E 'v1$|vX.Y.Z'
 ```
+
+Then the back-merge, the same day: `main` now has the release commit and
+`develop` does not.
+
+```bash
+gh pr create --base develop --head main --title "chore: back-merge vX.Y.Z into develop"
+```
+
+Ihor merges it with a merge commit. Until it lands, the standard check warns that
+`main` is ahead of `develop`.
 
 ## 4. GitHub Release
 
