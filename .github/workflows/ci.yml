@@ -18,3 +18,7 @@ jobs:
           node-version: '20'
       # No install step: the action has no dependencies, which is the point.
       - run: npm test
+
+      # R9 step 6. The rules are context/global/repo-standards.md; this is their teeth.
+      - name: Repository standard
+        run: node scripts/verify-repo-standards.mjs
